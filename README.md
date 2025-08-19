@@ -28,11 +28,63 @@ This is a distributed video processing system with fault tolerance, leader elect
     - Comprehensive logging and status tracking
 
 ## System Architecture
+The system consists of four main components:
 
-![Distributed Video Encoding](./design.png)
+1. **Client**: The client is the user's entry point to the system. It's used to upload videos for processing, retrieve the final processed videos, and check the status of ongoing tasks.
+
+2. **Master Node**: The master node is the "brain" of the operation. It's responsible for:
+   - Receiving video uploads from the client.
+   - Segmenting the video into smaller shards.
+   - Distributing these shards to the available worker nodes.
+   - Tracking the status of each shard.
+   - Retrieving the processed shards from the workers.
+   - Concatenating the processed shards into the final video.
+   - Handling client requests for video retrieval and status updates.
+
+3. **Worker Nodes**: These are the workhorses of the system. Each worker node receives shards from the master, processes them (e.g., resizing, transcoding), and sends them back to the master. They also report their health and resource scores to the master.
+
+4. **Backup Nodes**: These nodes store replicas of the video data to ensure that no data is lost if the master node fails.
+
+
+## How it Works: A Step-by-Step Example
+
+1. **Upload**  
+   A user runs `client.py` to upload a video to the master node. The client streams the video in chunks to the master.
+
+2. **Segmentation**  
+   The master receives the video and uses **FFmpeg** to segment it into smaller, manageable shards based on keyframes.
+
+3. **Distribution**  
+   The master distributes these shards to available worker nodes using a load-balancing strategy based on each worker’s resource score.
+
+4. **Processing**  
+   Each worker node receives a shard, processes it with **FFmpeg** (e.g., changing the resolution or format), and notifies the master when finished.
+
+5. **Retrieval**  
+   The master retrieves the processed shards from the worker nodes.
+
+6. **Concatenation**  
+   After all processed shards are retrieved, the master uses **FFmpeg** to concatenate them into the final processed video.
+
+7. **Download**  
+   The user runs `client.py` again to download the final processed video from the master.
+
+
+## Fault Tolerance in Action
+
+### If the Master Fails:
+- Worker nodes detect that the master is unavailable via health checks.  
+- A **leader election** process is initiated to choose a new master from among the workers.  
+- The node with the **best resource score** is typically elected as the new master.  
+- The new master restores the system state from the **backup nodes** and resumes video processing tasks from where they left off.  
+
+### If a Worker Fails:
+- The master node detects that a worker is unresponsive.  
+- It marks the shards assigned to that worker as **"failed."**  
+- The master redistributes those failed shards to other healthy worker nodes in the cluster.  
+
 
 ## Prerequisites
-
 - Python 3.9+
 - FFmpeg 4.3+ with libx264
 - MKVToolNix for container operations
